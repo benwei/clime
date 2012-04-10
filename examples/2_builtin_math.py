@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from math import log
+'''This module show the case of built-in function.'''
 
-def print_log(n):
-    print log(n, 2)
+from math import *
 
 if __name__ == '__main__':
     import clime

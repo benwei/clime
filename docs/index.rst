@@ -3,118 +3,130 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Clime's documentation!
-=================================
+Introduce
+=========
 
-This is the documentaion of Clime.
-
-Clime is a simple Python module to let you convert a Python program contains
+Clime is a Python module to let you convert a Python program contains
 functions into a multi-command CLI program.
 
-Installation
-------------
+Clime is *very easy* to use and *low couple* (even not!) with your source.
+It is a better choice than the heavy `optparse` or `argparse` for simple CLI
+tasks. 
 
-Here are two places to get the Clime. 
-
-The stable version will be upload to `PyPI`_.  Install with ``pip`` command.  
-
-.. code-block:: bash
-
-    $ sudo pip install clime
-
-Clime is also on GitHub_. Visit `moskied/clime`_ for the lastest version.
-
-.. _GitHub: http://github.com/
-.. _`moskied/clime`: https://github.com/moskied/clime
-.. _PyPI: http://pypi.python.org/
+Let me show an example for you.
 
 CLI-ize ME!
 -----------
 
-Here is the usage of Clime.
+A simple script here: ::
 
-Clime is designed to easily use, so it is very easy. You have two ways to CLI-ize your program.
+    #file: test.py
+    def repeat(string, n=2):
+        for i in range(n):
+            print string
 
-In Source Code
-""""""""""""""
+After add two lines, ::
 
-Add two lines below into your source:
+    import clime
+    clime.main()
 
->>> import clime
->>> clime.main()
+... you have a CLI program now! ::
+    
+    $ python test.py twice
+    twice
+    twice
 
-Recommend to put the codes into the ``if __name__ == '__main__':`` block.
+    $ python test.py -n3 thrice
+    thrice
+    thrice
+    thrice
 
-In Shell
-""""""""
+And it also support ``--help``: ::
 
-If you want to convert a moudle temporarily, you can use the ``clime``
-command.
+    usage: test.py [-n VAL] STRING 
+       or: test.py repeat [-n VAL] STRING
 
-.. code-block:: bash
+If you wrote the docstring, it will also show on help.
+    
+You can find more examples in the `clime/examples`_.
 
-    $ sudo ln -s /usr/local/lib/python<VERSION>/dist-packages/clime.py /usr/bin/clime
-    $ sudo chmod 755 /usr/bin/clime 
+.. seealso::
+   :meth:`clime.Command.parse` for more details about argument parsing.
 
-    $ clime <module_name> <args_for_module>
+.. _`clime/examples`:
+    https://github.com/moskied/clime/tree/master/examples
 
-Examples
-""""""""
+Installation
+------------
 
-Here is a simple example of Clime:
+Clime is hosted on two different platform, PyPI_ and GitHub_.
 
-::
+1. **Install from PyPI**
+   
+   Install Clime from PyPI_ for a stable version ::
+   
+     $ sudo pip install clime
+     
+   If you don't have `pip`, execute ::
+   
+     $ sudo apt-get install python-pip
+     
+   to install `pip` on Debian-base Linux distribution.
 
-    # file: example/singlecmd.py
+2. **Get Clime from GitHub**
+   
+   If you want to follow the lastest version of Clime, use ::
+   
+     $ git clone git://github.com/moskied/clime.git
+     
+   to clone a Clime repository. Or download manually from GitHub_.
 
-    '''Here is docstring of module.'''
+.. _GitHub:
+    http://github.com/moskied/clime
 
-    def onlyme(s, b=True, l=None):
-        '''Here is docstring of function.'''
+.. _PyPI:
+    http://pypi.python.org/pypi/clime
 
-        print 's:', s
-        print 'b:', b
-        print 'l:', l
+Usage
+-----
 
-    if __name__ == '__main__':
-        import clime
-        clime.main()
+Here is the basic usage of Clime.
 
-Use it in shell:
+You have two different ways to use Clime.
 
-.. code-block:: bash
+1. **Insert Lines into Source**
+   
+   Just add two lines below into your source ::
+   
+     import clime
+     clime.main()
+   
+   Recommend to put the codes into the ``if __name__ == '__main__':`` block.
 
-    $ python singlecmd.py --help
-    usage: singlecmd.py [-b] [-l VAL] s 
-       or: singlecmd.py onlyme [-b] [-l VAL] s 
+2. **Use clime.py as A Command**
+   
+   `clime.py` is also an executable script. Use it to convert a moudle or a
+   Python file temporarily.
+   
+   For convenience, make a command for `clime.py` ::
+   
+     $ sudo ln -s /usr/local/lib/python<VERSION>/dist-packages/clime.py /usr/local/bin/clime
+     $ sudo chmod 755 /usr/local/bin/clime 
+     
+   Then, you can use ``clime`` as a normal command ::
 
-    Here is docstring of module.
+     $ clime MODULE_OR_FILE ARGS
 
-    $ python singlecmd.py onlyme --help
-    usage: singlecmd.py onlyme [-b] [-l VAL] s 
+.. seealso::
+    :func:`clime.main` for more usages.
 
-    Here is docstring of function.
+More Details
+------------
 
-    $ python singlecmd.py test -b -loption_arg
-    s: test
-    b: False
-    l: option_arg
-
-    $ python singlecmd.py test -bbb -l one -l two -l three
-    s: test
-    b: 3
-    l: ['one', 'two', 'three']
-
-See the `clime.Command.parse <deeper.html#clime.Command.parse>`_ section for more details
-about argument parsing.
-
-You can find more examples under the ``clime/examples`` of source tarball of Clime.
-
-OK, it is the all of the usage of Clime. If you want to know more details or
-help Clime, please visit the below page
+It is the all of basic of Clime. If you want to know more, details are here:
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    deeper
 

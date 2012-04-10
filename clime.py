@@ -4,7 +4,8 @@
 import sys, getopt
 import inspect
 import textwrap
-from types import BuiltinFunctionType
+
+__version__ = '0.1.3'
 
 def getdoc(obj):
     r'''Get the documentation of `obj`.
@@ -37,43 +38,72 @@ def autotype(s):
         return s
 
 def getargspecfromdoc(func):
-    '''Parse the docstring of `func` and return `argspec`.
+    '''
+    .. deprecated:: 0.1.3
+       Use :func:`getargspec` instead.
+
+    *Removed.*
+    '''
+
+def getargspec(func):
+    '''Get the argument specification of the `func`.
     
-    .. versionadded:: 0.1.1'''
+    `func` is a Python function, built-in function or bound method.
+    
+    It get the argument specification by parsing documentation of the
+    function if `func` is a built-in function.
+    
+    .. versionchanged:: 0.1.4
+       Remove `self` automatively if `func` is a method.
+
+    .. versionadded:: 0.1.3'''
+
+    if inspect.isfunction(func):
+        return inspect.getargspec(func)
+
+    if inspect.ismethod(func):
+        argspec = inspect.getargspec(func)
+        argspec[0].pop(0)
+        return argspec
 
     def strbetween(s, a, b):
         return s[s.find(a): s.rfind(b)]
 
-    argspecdoc = func.__doc__.split('\n')[0]
+    argspecdoc = (inspect.getdoc(func) or '').split('\n')[0]
     argpart = strbetween(argspecdoc, '(', ')')
     args = argpart.split(',')
     args = [ arg.strip(' ()[]') for arg in args ]
+    args = [ arg for arg in args if arg ]
 
     defaultpart = strbetween(argspecdoc, '[', ']')
-    defaultcount = defaultpart.count(',')
+    defaultcount = len([d for d in defaultpart.split(',') if d.strip('[]')])
 
-    return (args, None, None, (None,) * defaultcount or None)
+    return (args or None, None, None, (None,) * defaultcount or None)
 
 class Command(object):
-    '''Make a function to accpect arguments from command line.
+    '''Make a function, a built-in function or a bound method to accpect
+    arguments from command line.
     
-    You can set the aliases is a `dict` which key is the argument name of
-    `func`; the value is the alias of this key.
+    You can set the aliases in a `dict` in ``{alias: real}`` format.
     
     Or you can set aliases as a attribute of the `func`. Example: ::
         
         def cmd(long_option=None): pass
         cmd.aliases = {'s': 'long_option'}
 
+    .. versionadded:: 0.1.3
+       Arguments, `name` and `doc`.
     '''
 
-    def __init__(self, func, aliases=None):
-        self.func = func
+    def __init__(self, func, aliases=None, name=None, doc=None):
 
-        if isinstance(func, BuiltinFunctionType):
-            spec = getargspecfromdoc(func)
-        else:
-            spec = inspect.getargspec(func)
+        ul2hp = lambda s: s.replace('_', '-')
+
+        self.func = func
+        self.name = name or ul2hp( func.__name__ )
+        self.doc  = getdoc(func)
+
+        spec = getargspec(func)
 
         self.argnames = spec[0] or []
         self.varname  = spec[1]
@@ -82,7 +112,7 @@ class Command(object):
 
         self.opts = ( aliases or getattr(func, 'aliases', {}) ).copy()
         for name in self.defaults:
-            self.opts[ name.replace('_', '-') ] = name
+            self.opts[ ul2hp( name ) ] = name
 
     def parse(self, usrargs):
         '''Parse the `usrargs`, and return a tuple (`posargs`, `optargs`).
@@ -190,9 +220,9 @@ class Command(object):
                 posargs.insert(pos, val)
                 del optargs[argname]
 
-        # process for Built-in Function
-        # because the Built-in Function only accpect posargs
-        if isinstance(self.func, BuiltinFunctionType):
+        # map all of the optargs to posargs for `built-in function`,
+        # because the `built-in function` only accpects posargs
+        if inspect.isbuiltin(self.func):
             posargs.extend([None] * (len(self.argnames) - len(posargs)))
             for key, value in optargs.items():
                 posargs[self.argnames.index(key)] = value
@@ -204,38 +234,38 @@ class Command(object):
 
         return posargs, optargs
 
-    def get_usage(self, ignore_cmd=False):
+    def get_usage(self, isdefault=False):
         '''Return the usage of this command.
 
         Example:
 
             files [--mode VAL] [paths]...
+
+        .. versionchanged:: 0.1.3
+           the `ignore_cmd` is renamed to `isdefault`.
         '''
-        if self.opts==None:
-            return None
-        if ignore_cmd:
+        if isdefault:
             usage = '%s ' % sys.argv[0]
         else:
-            usage = '%s %s ' % (sys.argv[0], self.func.__name__)
+            usage = '%s %s ' % (sys.argv[0], self.name)
         for alias, real in self.opts.iteritems():
             hyphen = '-' * (1 + (len(alias) > 1))
             val = (' VAL', '')[isinstance(self.defaults.get(real, None), bool)]
             usage += '[%s%s%s] ' % (hyphen, alias, val)
         for argname in self.argnames[:-len(self.defaults) or None]:
-            usage += '%s ' % argname
+            usage += '%s ' % argname.upper()
         if self.varname:
             usage += '[%s]... ' % self.varname
         return usage
 
     def help(self):
-        '''Print help to stdout. Conatins usage and the docstring of this
+        '''Print help to stdout. Contains usage and the docstring of this
         function.'''
 
         print 'usage:', self.get_usage()
-        doc = getdoc(self.func)
-        if doc:
+        if self.doc:
             print
-            print doc
+            print self.doc
 
     def __call__(self, usrargs):
         '''Parse `usargs` and call the function.'''
@@ -244,40 +274,52 @@ class Command(object):
         return self.func(*posargs, **optargs)
 
 class Program(object):
-    '''Convert module into multi-command CLI program.
+    '''Convert a module, class or dict into multi-command CLI program.
     
-    `default` is the default function when a user calls `Program` object without command.'''
+    .. versionchanged:: 0.1.3
+       Argument `module` is renamed to `obj`. The types it accpect is more
+       specifically.
 
-    def __init__(self, module=None, default=None):
+    .. versionchanged:: 0.1.3
+       Use the name of default command, `defname` instead of `default`.
+    
+    .. versionadded:: 0.1.3
+       Argument `doc`.'''
 
-        self.default = default
-        self.module  = module or sys.modules['__main__']
+    def __init__(self, obj, defname=None, doc=None):
 
-        self.funcs = {}
-        for name, attr in self.module.__dict__.iteritems():
-            if not callable(attr):   continue
+        if not isinstance(obj, dict):
+            self.doc = doc or getdoc(obj)
+            obj = dict( (name, getattr(obj, name)) for name in dir(obj) )
+        else:
+            self.doc = doc
+
+        self.defname = defname
+
+        self.cmds = {}
+        for name, ref in obj.items():
+            if not callable(ref)   : continue
             if name.startswith('_'): continue
-            self.funcs[name] = attr
+            if inspect.isclass(ref): continue 
 
-        if len(self.funcs) == 1 and self.default is None:
-            self.default = self.funcs.values()[0]
+            self.cmds[name] = Command(ref, name=name)
+
+        if len(self.cmds) == 1 and self.defname is None:
+            self.defname = self.cmds.keys()[0]
 
     def get_cmds_usages(self):
         '''Return a list contains the usage of the functions in this program.'''
-        cmdlst = []
-        for func in self.funcs.values():
-            c = Command(func)
-            if c:
-               cmdlst.append(c.get_usage())
-        return cmdlst
+        return [ cmd.get_usage() for cmd in self.cmds.values() ]
 
-    def get_tip(self, func=None):
-        '''Return the 'Try ... for more information.' tip.'''
+    def get_tip(self, cmd=None):
+        '''Return the 'Try ... for more information.' tip.
 
-        if not func:
-            target = sys.argv[0]
-        else:
-            target = '%s %s' % (sys.argv[0], func.__name__)
+        .. versionchanged:: 0.1.3
+           Take a command as argument instead of a function.'''
+
+        target = sys.argv[0]
+        if cmd:
+            target += ' ' + cmd.name
 
         return 'Try `%s --help` for more information.' % target
 
@@ -285,8 +327,8 @@ class Program(object):
         '''Print the complete help of this program.'''
 
         usages = self.get_cmds_usages()
-        if self.default:
-            usages.insert(0, Command(self.default).get_usage(True))
+        if self.defname:
+            usages.insert(0, self.cmds[self.defname].get_usage(isdefault=True))
         for i, usage in enumerate(usages):
             if usage == None: continue
             if i == 0:
@@ -295,36 +337,37 @@ class Program(object):
                 print '   or:',
             print usage
 
-        doc = getdoc(self.module)
-        if doc:
+        if self.doc:
             print
-            print doc
+            print self.doc
 
-    def help_error(self, func=None):
-        '''Print the tip.'''
+    def help_error(self, cmd=None):
+        '''Print the tip.
 
-        print self.get_tip(func)
+        .. versionchanged:: 0.1.3
+           Take a command as argument instead of a function.'''
+
+        print self.get_tip(cmd)
 
     def __call__(self, usrargs):
         '''Use it as a CLI program.'''
         
         if not usrargs or usrargs[0] == '--help':
             self.help()
-            sys.exit(0)
+            return 0
 
         try:
-            func = self.funcs[usrargs[0]]
+            cmd = self.cmds[usrargs[0]]
         except KeyError:
-            func = self.default
+            cmd = self.cmds.get(self.defname, None)
         else:
             usrargs.pop(0)
 
-        if func is None:
+        if cmd is None:
             print '%s: No command \'%s\' found.' % (sys.argv[0], usrargs[0])
             self.help_error()
-            sys.exit(2)
+            return 2
 
-        cmd = Command(func)
         try:
             val = cmd(usrargs)
         except (getopt.GetoptError, TypeError), err:
@@ -333,34 +376,66 @@ class Program(object):
                 cmd.help()
             else:
                 print '%s: %s' % (sys.argv[0], str(err))
-                self.help_error(func)
+                self.help_error(cmd)
 
-            sys.exit(2)
+            return 2
         else:
             if val: print val
-            sys.exit(0)
+            return 0
 
-
-def main(default=None, module=None):
+def main(obj=None, defname=None, doc=None, exit=False):
     '''Use it to simply convert your program.
+
+    `obj` is the target you want to convert. `obj` can be a moudle, a class
+    or a dict. If `obj` is None, it uses the `__main__` module (the
+    first-running Python program).
     
-    `default` is the default function if call this program without command.
+    `defname` is the name of default command, an attribute name or a key in
+    `obj`.
 
-    `module` is the module you want to convert. Default is the '__main__' in
-    ``sys.modules``.'''
+    `doc` is the addational information you want to show on help. Use the
+    docstring of `obj` by default.
 
-    prog = Program(module, default)
-    prog(sys.argv[1:])
+    `exit`, True if you want to exit entire program after calling it.
+
+    .. versionchanged:: 0.1.3
+       Arguments `module` is renamed to `obj` and `default` is renamed to
+       `defname` and changed the usage.
+
+    .. versionadded:: 0.1.3
+       Arguments `doc` and `exit`.
+    '''
+
+    prog = Program(obj or sys.modules['__main__'], defname, doc)
+    status = prog(sys.argv[1:])
+    if exit:
+        sys.exit(status)
+    else:
+        return status
 
 if __name__ == '__main__':
 
-    def clime(module_name, *args):
-        '''Dynamicly make a module into CLI program.'''
-        module = __import__(module_name)
-        prog = Program(module)
-        prog(sys.argv[2:])
+    def clime(target, *args):
+        '''Dynamicly make a module or Python file into CLI program.
 
-    fakemodule = lambda: ''
-    fakemodule.clime = clime
+        `target` can be a moudle or Python file path.'''
 
-    main(module=fakemodule)
+        module = None
+
+        try:
+            module = __import__(target)
+        except ImportError:
+            pass
+
+        try:
+            module = {}
+            execfile(target, module)
+        except IOError, e:
+            module = None
+            print '%s: %s' % (sys.argv[0], e)
+
+        if module:
+            prog = Program(module)
+            prog(sys.argv[2:])
+
+    main({'clime': clime})
